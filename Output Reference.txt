@@ -1,0 +1,136 @@
+Sample #0, Start = B1613, End = B1316
+Expected Distance: 300
+Obtained Distance: 300
+Computation took 0.0071ms.
+
+
+Sample #1, Start = A608, End = A1201
+Expected Distance: 608
+Obtained Distance: 608
+Computation took 0.0061ms.
+
+
+Sample #2, Start = A601, End = A1225
+Expected Distance: 456
+Obtained Distance: 456
+Computation took 0.0054ms.
+
+
+Sample #3, Start = B609, End = B1207
+Expected Distance: 478
+Obtained Distance: 478
+Computation took 0.0062ms.
+
+
+Sample #4, Start = A403, End = B528
+Expected Distance: 593
+Obtained Distance: 593
+Computation took 0.0043ms.
+
+
+Sample #5, Start = B1915, End = B1326
+Expected Distance: 649
+Obtained Distance: 649
+Computation took 0.005ms.
+
+
+Sample #6, Start = A405, End = A1017
+Expected Distance: 692
+Obtained Distance: 692
+Computation took 0.0047ms.
+
+
+Sample #7, Start = A9805, End = A2618
+Expected Distance: 6357
+Obtained Distance: 6357
+Computation took 0.0209ms.
+
+
+Sample #8, Start = A3022, End = B3004
+Expected Distance: 268
+Obtained Distance: 268
+Computation took 0.0051ms.
+
+
+Sample #9, Start = A9522, End = B4406
+Expected Distance: 4024
+Obtained Distance: 4024
+Computation took 0.0141ms.
+
+
+Sample #10, Start = B2909, End = A9623
+Expected Distance: 5372
+Obtained Distance: 5372
+Computation took 0.0267ms.
+
+
+Sample #11, Start = B10013, End = B1110
+Expected Distance: 7769
+Obtained Distance: 7769
+Computation took 0.0225ms.
+
+
+Sample #12, Start = B9720, End = B4110
+Expected Distance: 4544
+Obtained Distance: 4544
+Computation took 0.0162ms.
+
+
+Sample #13, Start = A8321, End = B120
+Expected Distance: 6012
+Obtained Distance: 6012
+Computation took 0.021ms.
+
+
+Sample #14, Start = B69128, End = A76807
+Expected Distance: 6742
+Obtained Distance: 6742
+Computation took 0.0409ms.
+
+
+Sample #15, Start = A47925, End = A72025
+Expected Distance: 20544
+Obtained Distance: 20544
+Computation took 0.1163ms.
+
+
+Sample #16, Start = B48104, End = B56904
+Expected Distance: 7750
+Obtained Distance: 7750
+Computation took 0.0462ms.
+
+
+Sample #17, Start = A39523, End = A67207
+Expected Distance: 22450
+Obtained Distance: 22450
+Computation took 0.1369ms.
+
+
+Sample #18, Start = B60106, End = A5220
+Expected Distance: 44115
+Obtained Distance: 44115
+Computation took 0.1184ms.
+
+
+Sample #19, Start = B33927, End = A50617
+Expected Distance: 13148
+Obtained Distance: 13148
+Computation took 0.0797ms.
+
+
+Sample #20, Start = B54905, End = A83016
+Expected Distance: 20403
+Obtained Distance: 20403
+Computation took 0.1289ms.
+
+
+Sample #21, Start = A92420, End = A52108
+Expected Distance: 31546
+Obtained Distance: 31546
+Computation took 0.0994ms.
+
+
+Sample #22, Start = A30520, End = A22311
+Expected Distance: 7356
+Obtained Distance: 7356
+Computation took 0.0206ms.
