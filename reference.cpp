@@ -1,201 +1,363 @@
 #include "reference.h"
+#include <iostream>
+#include <vector>
+#include <string>
+#include <unordered_map>
 #include <queue>
 #include <limits>
-#include <sstream>
 #include <algorithm>
-#include <iomanip>
+#include <sstream>
 
 namespace reference {
-
+// Structure to represent an edge in the graph
 struct Edge {
-    int to;
+    std::string dest;
     int weight;
+    
+    Edge(const std::string& d, int w) : dest(d), weight(w) {}
 };
 
-int FindShortestPath(std::string start, std::string end, 
-                     std::vector<std::string>& path, int** eWeights) {
-    const int COST_OFFICE_CORRIDOR = 5;
-    const int COST_CORRIDOR_EDGE = 5;
-    const int COST_ELEVATOR_CORRIDOR = 8;
-    const int COST_INTERTOWER = 100;
-    const int NODES_PER_FLOOR = 44;
-    const int OFFICE_COUNT = 28;
-    const int CORRIDOR_COUNT = 14;
-    const int MAX_FLOORS = 1000;
+// Structure to represent a graph node
+struct Node {
+    std::string name;
+    std::vector<Edge> neighbors;
+
+    Node() : name() {}                  // ← 新增：允许无参构造
+    Node(const std::string& n) : name(n) {}
+};
+
+
+// Graph class
+class Graph {
+private:
+    std::unordered_map<std::string, Node> nodes;
+    int numFloors;
     
-    // 快速解析办公室标签
-    auto parseOfficeLabel = [](const std::string &label) {
-        return std::make_pair(
-            std::stoi(label.substr(1, label.size()-3)),
-            std::stoi(label.substr(label.size()-2, 2))
-        );
-    };
-
-    // 确定实际需要的楼层数
-    auto [startFloor, startRoom] = parseOfficeLabel(start);
-    auto [endFloor, endRoom] = parseOfficeLabel(end);
-    int numFloors = std::max({startFloor, endFloor, 100}); // 至少100层
-
-    // 计算总节点数并初始化图
-    int totalNodes = 2 * numFloors * NODES_PER_FLOOR;
-    std::vector<std::vector<Edge>> graph(totalNodes);
-
-    // 获取节点索引的lambda函数
-    auto getIndex = [=](int tower, int floor, int localIndex) {
-        return (tower * numFloors + (floor - 1)) * NODES_PER_FLOOR + localIndex;
-    };
-
-    // 构建楼层内部连接
-    for (int t = 0; t < 2; t++) {
-        for (int f = 1; f <= numFloors; f++) {
-            // 办公室到走廊的连接
-            for (int r = 1; r <= OFFICE_COUNT; r++) {
-                int officeNode = getIndex(t, f, r - 1);
-                int door = (r <= 14 ? r : r - 14);
-                int corridorNode = getIndex(t, f, OFFICE_COUNT + (door - 1));
-                graph[officeNode].push_back({corridorNode, COST_OFFICE_CORRIDOR});
-                graph[corridorNode].push_back({officeNode, COST_OFFICE_CORRIDOR});
-            }
-
-            // 走廊之间的连接
-            for (int j = 1; j < CORRIDOR_COUNT; j++) {
-                int node1 = getIndex(t, f, OFFICE_COUNT + (j - 1));
-                int node2 = getIndex(t, f, OFFICE_COUNT + j);
-                graph[node1].push_back({node2, COST_CORRIDOR_EDGE});
-                graph[node2].push_back({node1, COST_CORRIDOR_EDGE});
-            }
-
-            // 电梯到走廊的连接
-            int elev1 = getIndex(t, f, 42);
-            int corr1 = getIndex(t, f, OFFICE_COUNT);
-            graph[elev1].push_back({corr1, COST_ELEVATOR_CORRIDOR});
-            graph[corr1].push_back({elev1, COST_ELEVATOR_CORRIDOR});
-
-            int elev2 = getIndex(t, f, 43);
-            int corr14 = getIndex(t, f, OFFICE_COUNT + 13);
-            graph[elev2].push_back({corr14, COST_ELEVATOR_CORRIDOR});
-            graph[corr14].push_back({elev2, COST_ELEVATOR_CORRIDOR});
-        }
+    // Helper to add an edge between two nodes
+    void addEdge(const std::string& from, const std::string& to, int weight) {
+        nodes[from].neighbors.push_back(Edge(to, weight));
+        nodes[to].neighbors.push_back(Edge(from, weight)); // Undirected graph
     }
-
-    // 构建电梯垂直连接
-    for (int t = 0; t < 2; t++) {
-        for (int f = 1; f < numFloors; f++) {
-            // 电梯1
-            int nodeCur = getIndex(t, f, 42);
-            int nodeNext = getIndex(t, f+1, 42);
-            int weight = (t == 0) ? eWeights[0][f-1] : eWeights[2][f-1];
-            graph[nodeCur].push_back({nodeNext, weight});
-            graph[nodeNext].push_back({nodeCur, weight});
-
-            // 电梯2
-            nodeCur = getIndex(t, f, 43);
-            nodeNext = getIndex(t, f+1, 43);
-            weight = (t == 0) ? eWeights[1][f-1] : eWeights[3][f-1];
-            graph[nodeCur].push_back({nodeNext, weight});
-            graph[nodeNext].push_back({nodeCur, weight});
-        }
-    }
-
-    // 构建天桥连接
-    int beamWeight = eWeights[0][0];
-    for (int f = 10; f <= numFloors; f += 10) {
-        if (f > 1) {
-            int nodeA = getIndex(0, f, 21);
-            int nodeB = getIndex(1, f-1, 7);
-            graph[nodeA].push_back({nodeB, beamWeight});
-            graph[nodeB].push_back({nodeA, beamWeight});
-        }
-        if (f < numFloors) {
-            int nodeA = getIndex(0, f, 22);
-            int nodeB = getIndex(1, f+1, 8);
-            graph[nodeA].push_back({nodeB, beamWeight});
-            graph[nodeB].push_back({nodeA, beamWeight});
-        }
-    }
-
-    // 一楼大楼间连接
-    int nodeA_floor1 = getIndex(0, 1, 43);
-    int nodeB_floor1 = getIndex(1, 1, 43);
-    graph[nodeA_floor1].push_back({nodeB_floor1, COST_INTERTOWER});
-    graph[nodeB_floor1].push_back({nodeA_floor1, COST_INTERTOWER});
-
-    // 解析起点和终点
-    auto parseOffice = [&](const std::string &label) {
-        char tower = label[0];
-        int floor = std::stoi(label.substr(1, label.size()-3));
-        int room = std::stoi(label.substr(label.size()-2, 2));
-        return getIndex(tower == 'A' ? 0 : 1, floor, room - 1);
-    };
-
-    int startIndex = parseOffice(start);
-    int endIndex = parseOffice(end);
-
-    // Dijkstra算法
-    const int INF = std::numeric_limits<int>::max();
-    std::vector<int> dist(totalNodes, INF);
-    std::vector<int> prev(totalNodes, -1);
-    std::priority_queue<std::pair<int, int>, 
-                       std::vector<std::pair<int, int>>, 
-                       std::greater<>> pq;
     
-    dist[startIndex] = 0;
-    pq.push({0, startIndex});
-
-    while (!pq.empty()) {
-        auto [d, u] = pq.top();
-        pq.pop();
-        
-        if (d != dist[u]) continue;
-        if (u == endIndex) break;
-
-        for (const auto &edge : graph[u]) {
-            int v = edge.to;
-            int nd = d + edge.weight;
-            if (nd < dist[v]) {
-                dist[v] = nd;
-                prev[v] = u;
-                pq.push({nd, v});
-            }
-        }
+public:
+    Graph(int floors) : numFloors(floors) {
+        buildGraph();
     }
-
-    if (dist[endIndex] == INF) return -1;
-
-    // 重建路径
-    std::vector<int> nodePath;
-    for (int cur = endIndex; cur != -1; cur = prev[cur]) {
-        nodePath.push_back(cur);
-    }
-    std::reverse(nodePath.begin(), nodePath.end());
-
-    // 生成路径标签
-    auto nodeLabel = [&](int idx) {
-        int t = idx / (numFloors * NODES_PER_FLOOR);
-        int rem = idx % (numFloors * NODES_PER_FLOOR);
-        int f = rem / NODES_PER_FLOOR + 1;
-        int local = rem % NODES_PER_FLOOR;
-        char tower = (t == 0 ? 'A' : 'B');
-        std::ostringstream oss;
+    
+    // Parse node type and details
+    std::tuple<char, int, int, std::string> parseNode(const std::string& nodeName) {
+        char tower = nodeName[0]; // A or B
+        std::string nodeType;
+        int floor, index;
         
-        if (local < OFFICE_COUNT) {
-            oss << tower << f << std::setw(2) << std::setfill('0') << (local+1);
-        } else if (local < OFFICE_COUNT + CORRIDOR_COUNT) {
-            int corr = local - OFFICE_COUNT + 1;
-            oss << tower << "C" << f << std::setw(2) << std::setfill('0') << corr;
+        if (nodeName.length() >= 3 && (nodeName[1] == 'C' || nodeName[1] == 'E')) {
+            // Corridor or elevator node
+            nodeType = nodeName.substr(1, 1);
+            floor = std::stoi(nodeName.substr(2, nodeName.length() - 4));
+            index = std::stoi(nodeName.substr(nodeName.length() - 2));
         } else {
-            int elevId = local - (OFFICE_COUNT + CORRIDOR_COUNT) + 1;
-            oss << tower << "E" << f << std::setw(2) << std::setfill('0') << elevId;
+            // Room node
+            nodeType = "R"; // Room
+            floor = std::stoi(nodeName.substr(1, nodeName.length() - 3));
+            index = std::stoi(nodeName.substr(nodeName.length() - 2));
         }
-        return oss.str();
-    };
+        
+        return std::make_tuple(tower, floor, index, nodeType);
+    }
+    
+    // Build the entire graph structure
+    void buildGraph() {
+        // Build all nodes first
+        buildNodes();
+        
+        // Connect all nodes according to the rules
+        buildInternalConnections();
+    }
+    
+    // Create all nodes in the graph
+    void buildNodes() {
+        // Create nodes for all floors
+        for (int floor = 1; floor <= numFloors; floor++) {
+            // Tower A Rooms (A101-A114 for floor 1, A201-A214 for floor 2, etc.)
+            for (int i = 1; i <= 14; i++) {
+                std::string roomName = "A" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                nodes.emplace(roomName, Node(roomName));
+            }
+            
+            // Tower A Rooms (A115-A128 for floor 1, A215-A228 for floor 2, etc.)
+            for (int i = 15; i <= 28; i++) {
+                std::string roomName = "A" + std::to_string(floor) + std::to_string(i);
+                nodes.emplace(roomName, Node(roomName));
+            }
+            
+            // Tower B Rooms (B101-B114 for floor 1, B201-B214 for floor 2, etc.)
+            for (int i = 1; i <= 14; i++) {
+                std::string roomName = "B" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                nodes.emplace(roomName, Node(roomName));
+            }
+            
+            // Tower B Rooms (B115-B128 for floor 1, B215-B228 for floor 2, etc.)
+            for (int i = 15; i <= 28; i++) {
+                std::string roomName = "B" + std::to_string(floor) + std::to_string(i);
+                nodes.emplace(roomName, Node(roomName));
+            }
+            
+            // Tower A Corridors (AC101-AC114 for floor 1, AC201-AC214 for floor 2, etc.)
+            for (int i = 1; i <= 14; i++) {
+                std::string corridorName = "AC" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                nodes.emplace(corridorName, Node(corridorName));
+            }
+            
+            // Tower B Corridors (BC101-BC114 for floor 1, BC201-BC214 for floor 2, etc.)
+            for (int i = 1; i <= 14; i++) {
+                std::string corridorName = "BC" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                nodes.emplace(corridorName, Node(corridorName));
+            }
+            
+            // Tower A Elevators (AE101-AE102 for floor 1, AE201-AE202 for floor 2, etc.)
+            for (int i = 1; i <= 2; i++) {
+                std::string elevatorName = "AE" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                nodes.emplace(elevatorName, Node(elevatorName));
+            }
+            
+            // Tower B Elevators (BE101-BE102 for floor 1, BE201-BE202 for floor 2, etc.)
+            for (int i = 1; i <= 2; i++) {
+                std::string elevatorName = "BE" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                nodes.emplace(elevatorName, Node(elevatorName));
+            }
+        }
+    }
+    
+    // Connect nodes to form the graph structure
+    void buildInternalConnections() {
+        // Connect rooms to corridors and corridors to each other (5 weight)
+        for (int floor = 1; floor <= numFloors; floor++) {
+            // Connect Tower A rooms to corridors
+            for (int i = 1; i <= 14; i++) {
+                std::string roomName = "A" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                std::string corridorName = "AC" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                addEdge(roomName, corridorName, 5);
+            }
+            
+            for (int i = 15; i <= 28; i++) {
+                std::string roomName = "A" + std::to_string(floor) + std::to_string(i);
+                std::string corridorName = "AC" + std::to_string(floor) + (i-14 < 10 ? "0" : "") + std::to_string(i-14);
+                addEdge(roomName, corridorName, 5);
+            }
+            
+            // Connect Tower B rooms to corridors
+            for (int i = 1; i <= 14; i++) {
+                std::string roomName = "B" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                std::string corridorName = "BC" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                addEdge(roomName, corridorName, 5);
+            }
+            
+            for (int i = 15; i <= 28; i++) {
+                std::string roomName = "B" + std::to_string(floor) + std::to_string(i);
+                std::string corridorName = "BC" + std::to_string(floor) + (i-14 < 10 ? "0" : "") + std::to_string(i-14);
+                addEdge(roomName, corridorName, 5);
+            }
+            
+            // Connect Tower A corridors to each other
+            for (int i = 1; i < 14; i++) {
+                std::string corridor1 = "AC" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                std::string corridor2 = "AC" + std::to_string(floor) + (i+1 < 10 ? "0" : "") + std::to_string(i+1);
+                addEdge(corridor1, corridor2, 5);
+            }
+            
+            // Connect Tower B corridors to each other
+            for (int i = 1; i < 14; i++) {
+                std::string corridor1 = "BC" + std::to_string(floor) + (i < 10 ? "0" : "") + std::to_string(i);
+                std::string corridor2 = "BC" + std::to_string(floor) + (i+1 < 10 ? "0" : "") + std::to_string(i+1);
+                addEdge(corridor1, corridor2, 5);
+            }
+            
+            // Connect elevators to corridors (8 weight)
+            // Tower A elevators
+            std::string ae1 = "AE" + std::to_string(floor) + "01";
+            std::string ae2 = "AE" + std::to_string(floor) + "02";
+            std::string ac1 = "AC" + std::to_string(floor) + "01";
+            std::string ac14 = "AC" + std::to_string(floor) + "14";
+            
+            addEdge(ae1, ac1, 8);
+            addEdge(ae2, ac14, 8);
+            
+            // Tower B elevators
+            std::string be1 = "BE" + std::to_string(floor) + "01";
+            std::string be2 = "BE" + std::to_string(floor) + "02";
+            std::string bc1 = "BC" + std::to_string(floor) + "01";
+            std::string bc14 = "BC" + std::to_string(floor) + "14";
+            
+            addEdge(be1, bc1, 8);
+            addEdge(be2, bc14, 8);
+        }
+        
+        // Connect ground floor towers (weight 100)
+        addEdge("AE101", "BE101", 100);
+        addEdge("AE102", "BE102", 100);
+        
 
-    path.clear();
-    for (int idx : nodePath) {
-        path.push_back(nodeLabel(idx));
+    }
+    
+    // Add elevator edges with weights from the eWeights matrix
+    void connectElevators(int **eWeights) {
+        for (int floor = 1; floor < numFloors; floor++) {
+            // Tower A elevators
+            std::string ae1_curr = "AE" + std::to_string(floor) + "01";
+            std::string ae1_next = "AE" + std::to_string(floor+1) + "01";
+            addEdge(ae1_curr, ae1_next, eWeights[0][floor-1]);
+            
+            std::string ae2_curr = "AE" + std::to_string(floor) + "02";
+            std::string ae2_next = "AE" + std::to_string(floor+1) + "02";
+            addEdge(ae2_curr, ae2_next, eWeights[1][floor-1]);
+            
+            // Tower B elevators
+            std::string be1_curr = "BE" + std::to_string(floor) + "01";
+            std::string be1_next = "BE" + std::to_string(floor+1) + "01";
+            addEdge(be1_curr, be1_next, eWeights[2][floor-1]);
+            
+            std::string be2_curr = "BE" + std::to_string(floor) + "02";
+            std::string be2_next = "BE" + std::to_string(floor+1) + "02";
+            addEdge(be2_curr, be2_next, eWeights[3][floor-1]);
+        }
     }
 
-    return dist[endIndex];
-}
+    // Add cross-tower connections on every 10th floor
+    void connectCrossBeams(int **eWeights) {
+        for (int floor = 10; floor <= numFloors; floor += 10) {
+            // A{n}22 ↔ B{n–1}08
+            if (floor > 1) {
+                std::string a_node = "A" + std::to_string(floor) + "22";
+                std::string b_node = "B" + std::to_string(floor-1) + "08";
+                addEdge(a_node, b_node, eWeights[0][0]); // Same weight as 1st elevator
+            }
+            
+            // A{n}23 ↔ B{n+1}09
+            if (floor < numFloors) {
+                std::string a_node = "A" + std::to_string(floor) + "23";
+                std::string b_node = "B" + std::to_string(floor+1) + "09";
+                addEdge(a_node, b_node, eWeights[0][0]); // Same weight as 1st elevator
+            }
+        }
+    }
+    
+    // Dijkstra's algorithm to find shortest path
+    int dijkstra(const std::string& start, const std::string& end, std::vector<std::string>& path) {
+        // Priority queue for Dijkstra's algorithm
+        // Pair: (distance, node_name)
+        using pq_element = std::pair<int, std::string>;
+        std::priority_queue<pq_element, std::vector<pq_element>, std::greater<pq_element>> pq;
+        
+        // Map to store distances
+        std::unordered_map<std::string, int> dist;
+        
+        // Map to store predecessors for path reconstruction
+        std::unordered_map<std::string, std::string> prev;
+        
+        // Initialize distances to infinity
+        for (const auto& node_pair : nodes) {
+            dist[node_pair.first] = std::numeric_limits<int>::max();
+        }
+        
+        // Distance to start is 0
+        dist[start] = 0;
+        pq.push({0, start});
+        
+        // Run Dijkstra's algorithm
+        while (!pq.empty()) {
+            std::string u = pq.top().second;
+            int d = pq.top().first;
+            pq.pop();
+            
+            // Skip if we've already found a shorter path
+            if (d > dist[u]) continue;
+            
+            // Stop if we reached the destination
+            if (u == end) break;
+            
+            // Check all neighbors of u
+            for (const Edge& edge : nodes[u].neighbors) {
+                std::string v = edge.dest;
+                int w = edge.weight;
+                
+                // If we found a shorter path to v through u
+                if (dist[u] + w < dist[v]) {
+                    dist[v] = dist[u] + w;
+                    prev[v] = u;
+                    pq.push({dist[v], v});
+                }
+            }
+        }
+        
+        // Reconstruct the path
+        path.clear();
+        if (dist[end] != std::numeric_limits<int>::max()) {
+            // Path exists, reconstruct it
+            std::string curr = end;
+            while (curr != start) {
+                path.push_back(curr);
+                curr = prev[curr];
+            }
+            path.push_back(start);
+            
+            // Reverse to get path from start to end
+            std::reverse(path.begin(), path.end());
+        }
+        
+        return dist[end] == std::numeric_limits<int>::max() ? -1 : dist[end];
+    }
+    
+    int getNumFloors() const {
+        return numFloors;
+    }
+};
 
-} // namespace reference
+// Function to find the shortest path
+int FindShortestPath(const std::string &start, const std::string &end, 
+                     std::vector<std::string> &path, int **eWeights) {
+    // Determine number of floors by analyzing the eWeights array
+    // eWeights is 4xm where m is the number of floors
+    // We need to infer the number of floors from the context or arguments
+    
+    // For this implementation, let's extract the higher floor from start or end
+    int maxFloor = 1;
+    
+    // Extract floor from start
+    if (start.length() >= 3) {
+        int startFloor;
+        if (start[1] == 'C' || start[1] == 'E') {
+            startFloor = std::stoi(start.substr(2, start.length() - 4));
+        } else {
+            startFloor = std::stoi(start.substr(1, start.length() - 3));
+        }
+        maxFloor = std::max(maxFloor, startFloor);
+    }
+    
+    // Extract floor from end
+    if (end.length() >= 3) {
+        int endFloor;
+        if (end[1] == 'C' || end[1] == 'E') {
+            endFloor = std::stoi(end.substr(2, end.length() - 4));
+        } else {
+            endFloor = std::stoi(end.substr(1, end.length() - 3));
+        }
+        maxFloor = std::max(maxFloor, endFloor);
+    }
+    
+    // Add some extra floors to be safe
+    // In a real implementation, this should be passed as an argument
+    int numFloors = maxFloor + 10;
+    
+    // Build the graph
+    Graph graph(numFloors);
+    
+    // Connect elevators using the provided weights
+    graph.connectElevators(eWeights);
+
+    // Connect crossbeams
+    graph.connectCrossBeams(eWeights);
+    
+    // Run Dijkstra's algorithm to find the shortest path
+    return graph.dijkstra(start, end, path);
+}
+}
